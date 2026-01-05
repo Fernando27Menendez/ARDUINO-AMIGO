@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Amigo | IDE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/theme-one_dark.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/mode-c_cpp.min.js"></script>
+</head>
+
+<body>
+    <div class="ide-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <div class="brand-name">Arduino Amigo</div>
+            </div>
+            <div class="sidebar-content">
+                <span class="section-title">Ejemplos</span>
+                <div id="example-list">
+                    {% for nombre in ejemplos %}
+                    <div class="example-item" onclick="cargarEjemplo('{{ nombre }}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        {{ nombre }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Area -->
+        <main class="main-area">
+            <header class="top-bar">
+                <div class="file-info">
+                    <span class="text-muted small">archivo: </span>
+                    <span class="fw-semibold small">código.amigo</span>
+                </div>
+                <button id="btn-compile" class="btn-compile">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span id="btn-text">Compilar</span>
+                    <div id="btn-loader" class="spinner d-none"></div>
+                </button>
+            </header>
+
+            <div class="editor-grid">
+                <!-- Editor Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Editor</span>
+                    </div>
+                    <div id="editor-input" class="ace-editor"></div>
+                </div>
+
+                <!-- Preview Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Arduino C++ (.ino)</span>
+                    </div>
+                    <div id="editor-output" class="ace-editor"></div>
+                </div>
+
+                <!-- Bottom Panel -->
+                <div class="bottom-panel">
+                    <div class="console-tabs">
+                        <div class="tab active" onclick="switchTab('terminal')">Terminal</div>
+                        <div class="tab" onclick="switchTab('lexico')">Analizador de Lexemas (Lexer)</div>
+                        <div class="tab" onclick="switchTab('tac')">Tres Direcciones (TAC)</div>
+                    </div>
+
+                    <div id="terminal-content" class="tab-content">
+                        <div id="console-output" class="text-muted">Esperando compilación...</div>
+                    </div>
+
+                    <div id="lexico-content" class="tab-content d-none">
+                        <table class="tac-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px">Línea</th>
+                                    <th style="width: 200px">Token</th>
+                                    <th>Lexema (Valor)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lexico-body">
+                                <tr>
+                                    <td colspan="3" class="text-muted">Analiza tu código para ver los tokens.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="tac-content" class="tab-content d-none">
+                        <table class="tac-table">
+                            <thead>
+                                <tr>
+                                    <th>Operación</th>
+                                    <th>Arg 1</th>
+                                    <th>Arg 2</th>
+                                    <th>Resultado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tac-body">
+                                <tr>
+                                    <td colspan="4" class="text-muted">El código debe ser válido para generar TAC.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuración Ace
+        const setupEditor = (id, readOnly = false) => {
+            const editor = ace.edit(id);
+            editor.setTheme("ace/theme/one_dark");
+            editor.session.setMode("ace/mode/c_cpp");
+            editor.setOptions({
+                fontSize: "14px",
+                fontFamily: "'JetBrains Mono', monospace",
+                showPrintMargin: false,
+                readOnly: readOnly,
+                highlightActiveLine: !readOnly,
+                cursorStyle: readOnly ? "none" : "line",
+                enableBasicAutocompletion: true,
+                useSoftTabs: true,
+                tabSize: 2
+            });
+            return editor;
+        };
+
+        const inputEditor = setupEditor("editor-input");
+        const outputEditor = setupEditor("editor-output", true);
+
+        const ejemplosData = {{ ejemplos | tojson | safe }};
+
+        function cargarEjemplo(nombre) {
+            if (ejemplosData[nombre]) {
+                inputEditor.setValue(ejemplosData[nombre], -1);
+                document.querySelectorAll('.example-item').forEach(item => {
+                    item.classList.toggle('active', item.innerText.trim() === nombre);
+                });
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            const activeTab = document.querySelector(`.tab[onclick*="${tab}"]`);
+            if (activeTab) activeTab.classList.add('active');
+
+            document.getElementById('terminal-content').classList.add('d-none');
+            document.getElementById('lexico-content').classList.add('d-none');
+            document.getElementById('tac-content').classList.add('d-none');
+            document.getElementById(`${tab}-content`).classList.remove('d-none');
+        }
+
+        document.getElementById('btn-compile').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-compile');
+            const btnText = document.getElementById('btn-text');
+            const consoleOut = document.getElementById('console-output');
+            const tacBody = document.getElementById('tac-body');
+            const lexicoBody = document.getElementById('lexico-body');
+
+            btn.disabled = true;
+            btnText.innerText = "Compilando...";
+            consoleOut.innerHTML = '<span class="text-muted">Procesando código...</span>';
+
+            try {
+                const response = await fetch('/compilar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigo: inputEditor.getValue() })
+                });
+
+                const data = await response.json();
+                outputEditor.setValue(data.cpp || '', -1);
+
+                // Llenar Lexer
+                lexicoBody.innerHTML = '';
+                if (data.tokens && data.tokens.length > 0) {
+                    data.tokens.forEach(token => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="text-muted">${token.linea}</td>
+                            <td class="badge-op">${token.tipo}</td>
+                            <td><span class="badge-res">${token.valor.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></td>
+                        `;
+                        lexicoBody.appendChild(tr);
+                    });
+                } else {
+                    lexicoBody.innerHTML = '<tr><td colspan="3" class="text-muted">No se generaron tokens.</td></tr>';
+                }
+
+                // Llenar TAC
+                tacBody.innerHTML = '';
+                if (data.tac && data.tac.length > 0) {
+                    data.tac.forEach(quad => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="badge-op">${quad.op}</td>
+                            <td class="text-muted">${quad.arg1 || '-'}</td>
+                            <td class="text-muted">${quad.arg2 || '-'}</td>
+                            <td><span class="badge-res">${quad.res || '-'}</span></td>
+                        `;
+                        tacBody.appendChild(tr);
+                    });
+                } else {
+                    tacBody.innerHTML = '<tr><td colspan="4" class="text-muted">No hay representación TAC.</td></tr>';
+                }
+
+                // Console / Alerts
+                if (data.errores && data.errores.length > 0) {
+                    consoleOut.innerHTML = '<ul class="error-list">' +
+                        data.errores.map(e => `<li class="error-item"><strong>Fallo de Compilación</strong>${e}</li>`).join('') + '</ul>';
+                    switchTab('terminal');
+                } else {
+                    consoleOut.innerHTML = '<div class="success-message">✅ Análisis exitoso. Lexer, Parser y Generador completados.</div>';
+                }
+
+            } catch (err) {
+                consoleOut.innerHTML = `<div class="error-item"><strong>Error del Sistema</strong>${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btnText.innerText = "Compilar";
+            }
+        });
+
+        window.onload = () => {
+            const firstExample = Object.keys(ejemplosData)[0];
+            if (firstExample) cargarEjemplo(firstExample);
+        };
+    </script>
+
+    <style>
+        .d-none {
+            display: none !important;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</body>
+
+</html>
