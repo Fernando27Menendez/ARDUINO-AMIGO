@@ -141,6 +141,32 @@ html {
     cursor: not-allowed;
 }
 
+.actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    border-color: var(--primary);
+    color: var(--text-main);
+    background: rgba(99, 102, 241, 0.05);
+}
+
 /* Editor Grid */
 .editor-grid {
     flex-grow: 1;
