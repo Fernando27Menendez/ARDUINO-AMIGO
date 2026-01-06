@@ -36,12 +36,33 @@ class Parser:
             linea = self.token_actual['linea'] if self.token_actual else "desconocida"
             raise Exception(f"Línea {linea}: Error Sintáctico. Se esperaba '{tipo_esperado}', pero se encontró '{encontrado}'")
 
+    def parse_valor_simple(self):
+        t = self.token_actual
+        if not t:
+            raise Exception("Fin de archivo inesperado.")
+        if t['tipo'] in ['NUM_ENTERO', 'NUM_DECIMAL', 'ID_VARIABLE']:
+            val = t['valor']
+            if t['tipo'] == 'ID_VARIABLE':
+                self.verificar_variable(val, t['linea'])
+            self.avanzar()
+            return val
+        else:
+             raise Exception(f"Línea {t['linea']}: Valor '{t['valor']}' no válido.")
+
+    def parse_expresion_aritmetica(self):
+        res = self.parse_valor_simple()
+        while self.token_actual and self.token_actual['tipo'] == 'OP_ARITMETICO':
+            op = self.consumir('OP_ARITMETICO')
+            arg2 = self.parse_valor_simple()
+            res = f"{res} {op} {arg2}"
+        return res
+
     def parse_programa(self):
         # 1. Librerías (Opcional)
         while self.token_actual and self.token_actual['tipo'] == 'RES_INCLUIR':
             self.consumir('RES_INCLUIR')
-            lib = self.consumir('VAL_TEXTO')
-            self.tac.agregar_libreria(lib)
+            lib = self.consumir('VAL_TEXTO').strip('"').strip("'")
+            self.tac.agregar_libreria(lib.lower())
             if self.token_actual and self.token_actual['tipo'] == 'SYM_PUNTO_COMA':
                 self.consumir('SYM_PUNTO_COMA')
 
@@ -233,36 +254,14 @@ class Parser:
                 self.tac.emit('call', 'pulseIn', attr, nombre_var, 'loop')
 
             else:
-                arg1_token = self.token_actual
-                if arg1_token['tipo'] == 'ID_VARIABLE':
-                    self.verificar_variable(arg1_token['valor'], arg1_token['linea'])
+                val_final = self.parse_expresion_aritmetica()
+                if self.token_actual and self.token_actual['tipo'] == 'SYM_PUNTO_COMA':
+                    self.consumir('SYM_PUNTO_COMA')
                 
-                if arg1_token['tipo'] in ['NUM_ENTERO', 'NUM_DECIMAL', 'ID_VARIABLE']:
-                    self.avanzar()
-                    arg1 = arg1_token['valor']
+                if tipo:
+                    self.tac.emit('declare', tipo, val_final, nombre_var, 'loop')
                 else:
-                    raise Exception(f"Línea {arg1_token['linea']}: Valor no válido.")
-                
-                if self.token_actual and self.token_actual['tipo'] == 'OP_ARITMETICO':
-                    op = self.consumir('OP_ARITMETICO')
-                    arg2_token = self.token_actual
-                    if arg2_token['tipo'] == 'ID_VARIABLE':
-                        self.verificar_variable(arg2_token['valor'], arg2_token['linea'])
-                    
-                    if arg2_token['tipo'] in ['NUM_ENTERO', 'NUM_DECIMAL', 'ID_VARIABLE']:
-                        self.avanzar()
-                        arg2 = arg2_token['valor']
-                    else:
-                        raise Exception(f"Línea {arg2_token['linea']}: Valor tras '{op}' no válido.")
-                    if self.token_actual and self.token_actual['tipo'] == 'SYM_PUNTO_COMA':
-                        self.consumir('SYM_PUNTO_COMA')
-                    if tipo: self.tac.emit('declare', tipo, '0', nombre_var, 'loop')
-                    self.tac.emit(op, arg1, arg2, nombre_var, 'loop')
-                else:
-                    if self.token_actual and self.token_actual['tipo'] == 'SYM_PUNTO_COMA':
-                        self.consumir('SYM_PUNTO_COMA')
-                    if tipo: self.tac.emit('declare', tipo, arg1, nombre_var, 'loop')
-                    else: self.tac.emit('=', arg1, None, nombre_var, 'loop')
+                    self.tac.emit('=', val_final, None, nombre_var, 'loop')
 
         elif t['tipo'] == 'RES_SI':
             self.parse_condicional()

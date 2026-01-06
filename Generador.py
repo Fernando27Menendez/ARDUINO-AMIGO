@@ -7,7 +7,7 @@ class Generador:
     def obtener_codigo_arduino(self):
         self.codigo += "// Código generado por Arduino Amigo\n"
         
-        if "servo.h" in self.tac.librerias_usadas:
+        if any(lib.lower() == "servo.h" for lib in self.tac.librerias_usadas):
             self.codigo += "#include <Servo.h>\n"
         
         self.codigo += "\n"
@@ -47,26 +47,40 @@ class Generador:
 
         # 3. VOID LOOP
         self.codigo += "void loop() {\n"
+        indent = "  "
+        stack = [] # Pila para reconstruir estructuras (tipo, etiqueta_objetivo)
+
         for inst in self.tac.loop_instructions:
             op = inst['op']
             res = inst['res']
             arg1 = inst['arg1']
             arg2 = inst['arg2']
 
+            # Verificar si alcanzamos una etiqueta que cierra un bloque
+            if op == 'label' and stack and stack[-1][1] == res:
+                tipo_bloque, etiqueta = stack.pop()
+                indent = indent[0:-2]
+                self.codigo += f"{indent}}}\n"
+                if tipo_bloque == 'if' and any(i['op'] == 'label' and i['res'] == etiqueta for i in self.tac.loop_instructions[self.tac.loop_instructions.index(inst)+1:]):
+                    # Podría haber un else a continuación si hay un goto previo, 
+                    # pero nuestra lógica de 'goto' ya lo maneja.
+                    pass
+                continue
+
             if op == 'declare':
                 tipo_arduino = "float" if arg1 == 'decimal' else "int"
                 if res not in self.vars_declaradas:
-                    self.codigo += f"  {tipo_arduino} {res} = {arg2};\n"
+                    self.codigo += f"{indent}{tipo_arduino} {res} = {arg2};\n"
                     self.vars_declaradas.add(res)
                 else:
-                    self.codigo += f"  {res} = {arg2};\n"
+                    self.codigo += f"{indent}{res} = {arg2};\n"
 
             elif op == '=':
                 prefijo = ""
                 if res not in self.vars_declaradas:
                     prefijo = "float "
                     self.vars_declaradas.add(res)
-                self.codigo += f"  {prefijo}{res} = {arg1};\n"
+                self.codigo += f"{indent}{prefijo}{res} = {arg1};\n"
 
             elif op in ['+', '-', '*', '/', '>', '<', '==', '>=', '<=']:
                 tipo = "bool" if op in ['>', '<', '==', '>=', '<='] else "float"
@@ -74,37 +88,53 @@ class Generador:
                 if res not in self.vars_declaradas:
                     prefijo = f"{tipo} "
                     self.vars_declaradas.add(res)
-                self.codigo += f"  {prefijo}{res} = {arg1} {op} {arg2};\n"
+                self.codigo += f"{indent}{prefijo}{res} = {arg1} {op} {arg2};\n"
 
             elif op == 'if_false':
-                self.codigo += f"  if (!{arg1}) goto {res};\n"
+                # Reconstrucción: if_false tX L1 -> if (tX) {
+                self.codigo += f"{indent}if ({arg1}) {{\n"
+                indent += "  "
+                stack.append(('if', res))
+
             elif op == 'goto':
-                self.codigo += f"  goto {res};\n"
+                # Si estamos en un 'if' y viene un goto, es probablemente un 'else'
+                if stack and stack[-1][0] == 'if':
+                    tipo, label_dest = stack.pop()
+                    indent = indent[0:-2]
+                    self.codigo += f"{indent}}} else {{\n"
+                    indent += "  "
+                    stack.append(('else', res))
+                else:
+                    # Salto explícito (raro en este lenguaje actual, pero por si acaso)
+                    self.codigo += f"{indent}goto {res};\n"
+
             elif op == 'label':
-                self.codigo += f"  {res}:\n"
+                # Ignoramos etiquetas que no cierran bloques según nuestra pila
+                # (como la etiqueta del else que ya procesamos en el goto)
+                pass
 
             elif op == 'call':
                 fn = arg1
                 a1 = arg2
                 r = res
                 if fn == 'digitalWrite':
-                    self.codigo += f"  digitalWrite({a1}, {r});\n"
+                    self.codigo += f"{indent}digitalWrite({a1}, {r});\n"
                 elif fn == 'delay':
-                    self.codigo += f"  delay({a1});\n"
+                    self.codigo += f"{indent}delay({a1});\n"
                 elif fn == 'write':
-                    self.codigo += f"  {r}.write({a1});\n"
+                    self.codigo += f"{indent}{r}.write({a1});\n"
                 elif fn == 'analogRead':
                     prefijo = ""
                     if r not in self.vars_declaradas:
                         prefijo = "int "
                         self.vars_declaradas.add(r)
-                    self.codigo += f"  {prefijo}{r} = analogRead({a1});\n"
+                    self.codigo += f"{indent}{prefijo}{r} = analogRead({a1});\n"
                 elif fn == 'pulseIn':
                     prefijo = ""
                     if r not in self.vars_declaradas:
                         prefijo = "long "
                         self.vars_declaradas.add(r)
-                    self.codigo += f"  {prefijo}{r} = pulseIn({a1}, HIGH);\n"
+                    self.codigo += f"{indent}{prefijo}{r} = pulseIn({a1}, HIGH);\n"
 
         self.codigo += "}\n"
         return self.codigo
