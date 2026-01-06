@@ -3,8 +3,14 @@ from flask import Flask, render_template, request
 from Lexer import get_tokens
 from Parser import Parser
 from Generador import Generador
-
+import os
 app = Flask(__name__)
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False)
+
 
 EJEMPLOS = {
     "1. Básico: Semáforo Inteligente": """configuracion:
