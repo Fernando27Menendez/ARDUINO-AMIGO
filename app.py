@@ -7,9 +7,6 @@ import os
 app = Flask(__name__)
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False)
 
 
 EJEMPLOS = {
@@ -243,5 +240,7 @@ def compilar():
             'errores': [str(e)]
         }), 200, {'ContentType':'application/json'}
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False)
+
